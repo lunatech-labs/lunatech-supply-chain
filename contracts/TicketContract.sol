@@ -7,15 +7,17 @@ contract TicketContract {
  struct Ticket {
     string name;
     string host;
+    bool initialized;
+    TicketStatus status;
 }
 
 Ticket[] TicketList;
 
 mapping(string  => Ticket) private ticketStore;
 
-mapping(address => mapping(string => bool)) private ticketOwnerCheck;
+mapping(address => mapping(string => bool)) private ticketOwner;
 
-enum TicketStatus { Available, onSale }
+enum TicketStatus { Available, onSale, Sold }
 
 
     function setId(string memory serial) public {
@@ -29,57 +31,37 @@ enum TicketStatus { Available, onSale }
 event createTicket(address account, string uuid, string manufacturer);
 event ticketTransfer(address from, address to, string uuid);
 event ticketSold(address from, address to, string uuid);
+event RejectTransfer(address from, address to, string uuid, string message);
 
 
-function ticketSold(address to, string memory uuid) public {
+function ticketSell(address to, string memory uuid) public {
  
     if(!ticketStore[uuid].initialized) {
-        emit RejectTransfer(msg.sender, to, uuid, "No ticket is found!!!");
+        emit RejectTransfer(msg.sender, to, uuid, "Duplicate Tickets!!!");
         return;
     }
     
-    if(ticketStore[uuid].status != AssetStatus.FoodManufacturing) {
-         emit RejectTransfer(msg.sender, to, uuid, "Status of asset is not match");
+    if(ticketStore[uuid].status != TicketStatus.Available) {
+         emit RejectTransfer(msg.sender, to, uuid, "Status of Ticket is not match");
         return;
     }
  
-    if(!walletStore[msg.sender][uuid]) {
-        emit RejectTransfer(msg.sender, to, uuid, "Sender does not own this asset.");
+    if(!ticketOwner[msg.sender][uuid]) {
+        emit RejectTransfer(msg.sender, to, uuid, "Seller does not own this Ticket.");
         return;
     }
  
-    walletStore[msg.sender][uuid] = false;
-    walletStore[to][uuid] = true;
-    assetStore[uuid].status = AssetStatus.onTheWay;
-    emit AssetTransfer(msg.sender, to, uuid);
+    ticketOwner[msg.sender][uuid] = false;
+    ticketOwner[to][uuid] = true;
+    ticketStore[uuid].status = TicketStatus.Sold;
+    emit ticketSold(msg.sender, to, uuid);
 }
 
-function toDistributor(address to, string memory uuid) public {
- 
-    if(!assetStore[uuid].initialized) {
-        emit RejectTransfer(msg.sender, to, uuid, "No asset with this UUID exists");
-        return;
-    }
-    
-    if(assetStore[uuid].status != AssetStatus.Available) {
-         emit RejectTransfer(msg.sender, to, uuid, "Status of asset is not match");
-        return;
-    }
- 
-    if(!assetStore[msg.sender][uuid]) {
-        emit RejectTransfer(msg.sender, to, uuid, "Sender does not own this ticket.");
-        return;
-    }
- 
-    ticketStore[msg.sender][uuid] = false;
-    ticketStore[to][uuid] = true;
-    ticketStore[uuid].status = AssetStatus.distributor;
-    emit ticketTransfer(msg.sender, to, uuid);
-}
+
 
 function isOwnerOf(address owner, string memory uuid) public view returns (bool) {
  
-    if(ticketStore[owner][uuid]) {
+    if(ticketOwner[owner][uuid]) {
         return true;
     }
  
